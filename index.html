@@ -54,7 +54,12 @@ const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
 const FULL_DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-function toKey(d) { return d.toISOString().split("T")[0]; }
+function toKey(d) {
+  const yr = d.getFullYear();
+  const mo = String(d.getMonth()+1).padStart(2,"0");
+  const dy = String(d.getDate()).padStart(2,"0");
+  return yr+"-"+mo+"-"+dy;
+}
 function getWeekStart(offset=0) {
   const today=new Date(),day=today.getDay(),diff=day===0?-6:1-day,m=new Date(today);
   m.setDate(today.getDate()+diff+offset*7); m.setHours(0,0,0,0); return m;
