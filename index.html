@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Team Presence Radar</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f172a; font-family: 'Segoe UI', sans-serif; }
+    textarea:focus { border-color: #818cf8 !important; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+const STORAGE_KEY = "team_presence_v1";
+const STATUSES = {
+  office:     { label:"In Office",    emoji:"🏢", color:"#22c55e", bg:"#dcfce7" },
+  wfh:        { label:"WFH",          emoji:"🏠", color:"#3b82f6", bg:"#dbeafe" },
+  wfh_planned:{ label:"Planned WFH",  emoji:"📅", color:"#8b5cf6", bg:"#ede9fe" },
+  leave:      { label:"Planned Leave",emoji:"🌴", color:"#f59e0b", bg:"#fef3c7" },
+  sick:       { label:"Sick Leave",   emoji:"🤒", color:"#ef4444", bg:"#fee2e2" },
+  unknown:    { label:"Not Marked",   emoji:"❓", color:"#9ca3af", bg:"#f3f4f6" },
+};
+const TEAM = [
+  { id:"dhanasekar",     name:"Dhanasekar",     avatar:"DK", role:"Head" },
+  { id:"vikasini",       name:"Vikasini",       avatar:"VK", role:"Lead" },
+  { id:"swethavarshini", name:"Swethavarshini", avatar:"SW", role:"Lead" },
+  { id:"hemalekha",      name:"Hemalekha",      avatar:"HL", role:"Team Member" },
+  { id:"rithunya",       name:"Rithunya",       avatar:"RT", role:"Team Member" },
+  { id:"dhivya",         name:"Dhivya",         avatar:"DH", role:"Team Member" },
+];
+const GRADIENTS = [
+  "linear-gradient(135deg,#f59e0b,#ef4444)",
+  "linear-gradient(135deg,#8b5cf6,#ec4899)",
+  "linear-gradient(135deg,#06b6d4,#3b82f6)",
+  "linear-gradient(135deg,#22c55e,#16a34a)",
+  "linear-gradient(135deg,#f97316,#f59e0b)",
+  "linear-gradient(135deg,#818cf8,#38bdf8)",
+];
+const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
+const FULL_DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function toKey(d) { return d.toISOString().split("T")[0]; }
+function getWeekStart(offset=0) {
+  const today=new Date(), day=today.getDay(), diff=day===0?-6:1-day, m=new Date(today);
+  m.setDate(today.getDate()+diff+offset*7); m.setHours(0,0,0,0); return m;
+}
+function getWeekDays(ws) { return Array.from({length:5},(_,i)=>{ const d=new Date(ws); d.setDate(ws.getDate()+i); return d; }); }
+function getMonthWeeks(md) {
+  const year=md.getFullYear(),month=md.getMonth(),firstDay=new Date(year,month,1),lastDay=new Date(year,month+1,0);
+  const start=new Date(firstDay),sd=start.getDay();
+  start.setDate(start.getDate()-(sd===0?6:sd-1));
+  const weeks=[]; let cur=new Date(start);
+  while(cur<=lastDay||weeks.length<4){ weeks.push(Array.from({length:7},(_,i)=>{ const d=new Date(cur); d.setDate(cur.getDate()+i); return d; })); cur.setDate(cur.getDate()+7); if(cur>lastDay&&weeks.length>=4) break; }
+  return weeks;
+}
+function App() {
+  const [presence,setPresence]=useState({});
+  const [loading,setLoading]=useState(true);
+  const [syncing,setSyncing]=useState(false);
+  const [weekOffset,setWeekOffset]=useState(0);
+  const [view,setView]=useState("week");
+  const [monthOffset,setMonthOffset]=useState(0);
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({status:"office",note:""});
+  const [toast,setToast]=useState(null);
+  const [activeFilter,setActiveFilter]=useState("all");
+  const [currentUser,setCurrentUser]=useState(()=>localStorage.getItem("tpr_user")||null);
+  const today=toKey(new Date()),weekStart=getWeekStart(weekOffset),weekDays=getWeekDays(weekStart);
+  const monthDate=new Date(new Date().getFullYear(),new Date().getMonth()+monthOffset,1);
+  const monthLabel=MONTHS[monthDate.getMonth()]+" "+monthDate.getFullYear();
+  const loadData=useCallback(()=>{ try{ const r=localStorage.getItem(STORAGE_KEY); if(r) setPresence(JSON.parse(r)); }catch(_){} setLoading(false); },[]);
+  const saveData=useCallback((np)=>{ setSyncing(true); try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(np)); }catch(e){} setTimeout(()=>setSyncing(false),600); },[]);
+  useEffect(()=>{ loadData(); },[loadData]);
+  useEffect(()=>{ const iv=setInterval(()=>{ try{ const r=localStorage.getItem(STORAGE_KEY); if(r) setPresence(JSON.parse(r)); }catch(_){} },10000); return ()=>clearInterval(iv); },[]);
+  const getEntry=(mid,dk)=>presence[mid]?.[dk]||{status:"unknown",note:""};
+  const countForDay=(dk,sk)=>TEAM.filter(m=>getEntry(m.id,dk).status===sk).length;
+  const todayCounts=Object.fromEntries(Object.keys(STATUSES).map(s=>[s,TEAM.filter(m=>getEntry(m.id,today).status===s).length]));
+  const filteredTeam=activeFilter==="all"?TEAM:TEAM.filter(m=>getEntry(m.id,today).status===activeFilter);
+  const weekLabel=()=>{ const end=new Date(weekStart); end.setDate(weekStart.getDate()+4); if(weekOffset===0)return "This Week"; if(weekOffset===1)return "Next Week"; if(weekOffset===-1)return "Last Week"; return weekStart.getDate()+" "+MONTHS[weekStart.getMonth()].slice(0,3)+" - "+end.getDate()+" "+MONTHS[end.getMonth()].slice(0,3); };
+  const showToast=msg=>{ setToast(msg); setTimeout(()=>setToast(null),3000); };
+  const openModal=(mid,dk,label)=>{ const cur=getEntry(mid,dk); setForm({status:cur.status==="unknown"?"office":cur.status,note:cur.note||""}); setModal({memberId:mid,dateKey:dk,label}); };
+  const saveModal=()=>{ const updated={...presence,[modal.memberId]:{...(presence[modal.memberId]||{}),[modal.dateKey]:{status:form.status,note:form.note,updatedAt:new Date().toISOString()}}}; setPresence(updated); saveData(updated); showToast("Status saved!"); setModal(null); };
+  const selectUser=(id)=>{ setCurrentUser(id); localStorage.setItem("tpr_user",id); };
+  const switchUser=()=>{ setCurrentUser(null); localStorage.removeItem("tpr_user"); };
+  if(!currentUser) return (
+    React.createElement("div",{style:{background:"#0f172a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}},
+      React.createElement("div",{style:{textAlign:"center",maxWidth:480,width:"100%"}},
+        React.createElement("div",{style:{fontSize:56,marginBottom:10}},"👋"),
+        React.createElement("h2",{style:{color:"#e2e8f0",fontWeight:900,fontSize:28,margin:"0 0 8px"}},"Welcome!"),
+        React.createElement("p",{style:{color:"#94a3b8",fontSize:16,marginBottom:32}},"Who are you? Pick your name to get started."),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
+          TEAM.map((m,i)=>React.createElement("button",{key:m.id,onClick:()=>selectUser(m.id),style:{padding:"18px 14px",borderRadius:16,border:"1px solid #334155",background:"#1e293b",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"#e2e8f0",width:"100%"}},
+            React.createElement("div",{style:{width:48,height:48,borderRadius:"50%",background:GRADIENTS[i],display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:14,color:"#fff",flexShrink:0}},m.avatar),
+            React.createElement("div",{style:{textAlign:"left"}},
+              React.createElement("div",{style:{fontWeight:700,fontSize:16}},m.name),
+              React.createElement("div",{style:{fontSize:13,color:"#64748b"}},m.role)
+            )
+          ))
+        )
+      )
+    )
+  );
+  const meIndex=TEAM.findIndex(m=>m.id===currentUser),me=TEAM[meIndex];
+  return React.createElement("div",{style:{fontFamily:"'Segoe UI',sans-serif",background:"#0f172a",minHeight:"100vh",color:"#e2e8f0",padding:"18px 16px"}},
+    toast&&React.createElement("div",{style:{position:"fixed",top:16,right:16,background:"#22c55e",color:"#fff",padding:"12px 22px",borderRadius:14,fontWeight:700,zIndex:9999,fontSize:15}},toast),
+    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}},
+      React.createElement("div",null,
+        React.createElement("h1",{style:{margin:0,fontSize:24,fontWeight:900,background:"linear-gradient(135deg,#818cf8,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"🚀 Team Presence Radar"),
+        React.createElement("p",{style:{margin:"3px 0 0",color:"#64748b",fontSize:13}},"Dhanasekar's Team · "+(syncing?"⏳ Saving...":"🟢 Ready"))
+      ),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,background:"#1e293b",padding:"8px 14px",borderRadius:22}},
+          React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:GRADIENTS[meIndex],display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff"}},me.avatar),
+          React.createElement("span",{style:{fontSize:14,fontWeight:700}},me.name)
+        ),
+        React.createElement("button",{onClick:switchUser,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:13}},"Switch"),
+        React.createElement("button",{onClick:loadData,style:{padding:"8px 12px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:15}},"🔄")
+      )
+    ),
+    React.createElement("div",{style:{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap",justifyContent:"center"}},
+      Object.entries(STATUSES).filter(([k])=>k!=="unknown").map(([key,s])=>
+        React.createElement("button",{key,onClick:()=>setActiveFilter(activeFilter===key?"all":key),style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:22,border:"2px solid "+(activeFilter===key?s.color:"transparent"),background:activeFilter===key?s.bg:"#1e293b",cursor:"pointer",color:activeFilter===key?s.color:"#94a3b8"}},
+          React.createElement("span",{style:{fontSize:18}},s.emoji),
+          React.createElement("span",{style:{fontWeight:900,fontSize:20}},todayCounts[key]),
+          React.createElement("span",{style:{fontSize:13,fontWeight:600}},s.label)
+        )
+      )
+    ),
+    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}},
+      React.createElement("div",{style:{display:"flex",background:"#1e293b",borderRadius:12,padding:4,gap:3}},
+        ["week","month"].map(v=>React.createElement("button",{key:v,onClick:()=>setView(v),style:{padding:"8px 18px",borderRadius:10,border:"none",background:v===view?"linear-gradient(135deg,#818cf8,#38bdf8)":"transparent",color:v===view?"#fff":"#64748b",fontWeight:700,cursor:"pointer",fontSize:14}},v==="week"?"📅 Week":"🗓 Month"))
+      ),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+        React.createElement("button",{onClick:()=>view==="week"?setWeekOffset(w=>w-1):setMonthOffset(m=>m-1),style:{width:36,height:36,borderRadius:"50%",border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}},"‹"),
+        React.createElement("button",{onClick:()=>{setWeekOffset(0);setMonthOffset(0);},style:{padding:"7px 16px",borderRadius:10,border:"1px solid #334155",background:"#1e293b",color:"#818cf8",cursor:"pointer",fontSize:14,fontWeight:700}},"Today"),
+        React.createElement("span",{style:{fontSize:15,fontWeight:700,color:"#e2e8f0",minWidth:130,textAlign:"center"}},view==="week"?weekLabel():monthLabel),
+        React.createElement("button",{onClick:()=>view==="week"?setWeekOffset(w=>w+1):setMonthOffset(m=>m+1),style:{width:36,height:36,borderRadius:"50%",border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}},"›")
+      )
+    ),
+    loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:"#64748b",fontSize:16}},"Loading..."):
+    React.createElement(React.Fragment,null,
+      view==="week"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:18,padding:16,overflowX:"auto"}},
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"150px repeat(5,1fr)",gap:6,marginBottom:10}},
+          React.createElement("div",{style:{fontSize:13,color:"#475569",padding:"4px 8px",fontWeight:700}},"MEMBER"),
+          weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today; return React.createElement("div",{key:i,style:{textAlign:"center",padding:"8px 4px",borderRadius:10,background:isToday?"rgba(129,140,248,.18)":"transparent",border:isToday?"1px solid rgba(129,140,248,.5)":"1px solid transparent"}},
+            React.createElement("div",{style:{fontSize:13,fontWeight:800,color:isToday?"#818cf8":"#64748b"}},DAY_NAMES[i]),
+            React.createElement("div",{style:{fontSize:18,fontWeight:900,color:isToday?"#e2e8f0":"#94a3b8"}},d.getDate()),
+            React.createElement("div",{style:{fontSize:11,color:"#22c55e",fontWeight:600}},"🏢 "+countForDay(key,"office"))
+          ); })
+        ),
+        filteredTeam.map((member)=>{ const mi=TEAM.findIndex(t=>t.id===member.id),isMe=member.id===currentUser;
+          return React.createElement("div",{key:member.id,style:{display:"grid",gridTemplateColumns:"150px repeat(5,1fr)",gap:6,marginBottom:8}},
+            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"6px 8px",borderRadius:10,background:isMe?"rgba(129,140,248,.1)":"transparent"}},
+              React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:GRADIENTS[mi],display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,border:isMe?"2px solid #818cf8":"2px solid transparent"}},member.avatar),
+              React.createElement("div",null,
+                React.createElement("div",{style:{fontSize:14,fontWeight:700,color:isMe?"#818cf8":"#e2e8f0",lineHeight:1.2}},member.name),
+                React.createElement("div",{style:{fontSize:11,color:isMe?"#818cf8":"#475569"}},isMe?"● YOU":member.role)
+              )
+            ),
+            weekDays.map((d,di)=>{ const key=toKey(d),entry=getEntry(member.id,key),s=STATUSES[entry.status]||STATUSES.unknown,isToday=key===today;
+              return React.createElement("button",{key:di,onClick:()=>openModal(member.id,key,member.name+" · "+FULL_DAY_NAMES[di]+", "+d.getDate()+" "+MONTHS[d.getMonth()].slice(0,3)),style:{padding:"8px 4px",borderRadius:12,border:isToday?"2px solid "+s.color:"2px solid transparent",background:s.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minHeight:64,outline:isMe?"2px solid rgba(129,140,248,.35)":"none",outlineOffset:2}},
+                React.createElement("span",{style:{fontSize:22}},s.emoji),
+                React.createElement("span",{style:{fontSize:10,fontWeight:800,color:s.color,textAlign:"center",lineHeight:1.3}},s.label.replace("Planned ","")),
+                entry.note&&React.createElement("span",{style:{fontSize:10}},"📝")
+              );
+            })
+          );
+        })
+      ),
+      view==="month"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:18,padding:16,overflowX:"auto"}},
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:8}},
+          ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>React.createElement("div",{key:d,style:{textAlign:"center",fontSize:13,fontWeight:800,color:d==="Sat"||d==="Sun"?"#334155":"#64748b",padding:"5px 0"}},d))
+        ),
+        getMonthWeeks(monthDate).map((week,wi)=>React.createElement("div",{key:wi,style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:5}},
+          week.map((d,di)=>{ const key=toKey(d),isThisMonth=d.getMonth()===monthDate.getMonth(),isToday=key===today,isWeekend=di>=5;
+            return React.createElement("div",{key:di,onClick:()=>{if(!isWeekend&&isThisMonth){setView("week");setWeekOffset(Math.round((d-new Date(getWeekStart(0)))/604800000));}},style:{minHeight:68,borderRadius:12,background:isToday?"rgba(129,140,248,.2)":isThisMonth&&!isWeekend?"#0f172a":"transparent",border:isToday?"1px solid rgba(129,140,248,.6)":"1px solid #1e293b",padding:"6px 7px",cursor:!isWeekend&&isThisMonth?"pointer":"default",opacity:isThisMonth?1:0.25}},
+              React.createElement("div",{style:{fontSize:14,fontWeight:isToday?900:600,color:isToday?"#818cf8":isWeekend?"#334155":"#94a3b8",marginBottom:3}},d.getDate()),
+              !isWeekend&&isThisMonth&&React.createElement("div",null,
+                countForDay(key,"office")>0&&React.createElement("div",{style:{fontSize:11,color:"#22c55e",fontWeight:700}},"🏢"+countForDay(key,"office")),
+                (countForDay(key,"wfh")+countForDay(key,"wfh_planned"))>0&&React.createElement("div",{style:{fontSize:11,color:"#3b82f6",fontWeight:700}},"🏠"+(countForDay(key,"wfh")+countForDay(key,"wfh_planned"))),
+                (countForDay(key,"leave")+countForDay(key,"sick"))>0&&React.createElement("div",{style:{fontSize:11,color:"#f59e0b",fontWeight:700}},"🌴"+(countForDay(key,"leave")+countForDay(key,"sick")))
+              )
+            );
+          })
+        )),
+        React.createElement("p",{style:{textAlign:"center",fontSize:13,color:"#64748b",marginTop:8}},"👆 Click any weekday to jump to that week")
+      ),
+      view==="week"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:14,padding:"12px 16px",marginTop:14}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:800,color:"#64748b",marginBottom:10}},"📊 WEEK SUMMARY"),
+        React.createElement("div",{style:{display:"flex",gap:8,overflowX:"auto"}},
+          weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today;
+            return React.createElement("div",{key:i,style:{flex:"0 0 auto",minWidth:88,background:isToday?"rgba(129,140,248,.12)":"#0f172a",borderRadius:12,padding:"8px 10px",border:isToday?"1px solid rgba(129,140,248,.4)":"1px solid transparent"}},
+              React.createElement("div",{style:{fontSize:13,fontWeight:800,color:isToday?"#818cf8":"#64748b",marginBottom:5}},DAY_NAMES[i]),
+              Object.entries(STATUSES).filter(([k])=>k!=="unknown"&&countForDay(key,k)>0).map(([k,s])=>
+                React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:4,marginBottom:2}},
+                  React.createElement("span",{style:{fontSize:12}},s.emoji),
+                  React.createElement("span",{style:{fontSize:13,color:s.color,fontWeight:700}},countForDay(key,k))
+                )
+              )
+            );
+          })
+        )
+      ),
+      React.createElement("div",{style:{display:"flex",gap:14,marginTop:14,flexWrap:"wrap",justifyContent:"center"}},
+        Object.entries(STATUSES).map(([k,s])=>React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:5}},
+          React.createElement("span",{style:{fontSize:15}},s.emoji),
+          React.createElement("span",{style:{fontSize:13,color:"#64748b",fontWeight:600}},s.label)
+        ))
+      )
+    ),
+    modal&&(()=>{ const member=TEAM.find(m=>m.id===modal.memberId),mi=TEAM.findIndex(m=>m.id===modal.memberId),isMe=modal.memberId===currentUser;
+      return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}},
+        React.createElement("div",{style:{background:"#1e293b",borderRadius:22,padding:26,width:"100%",maxWidth:420,border:"1px solid #334155"}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:14,marginBottom:22}},
+            React.createElement("div",{style:{width:52,height:52,borderRadius:"50%",background:GRADIENTS[mi],display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:15,color:"#fff"}},member.avatar),
+            React.createElement("div",null,
+              React.createElement("div",{style:{fontWeight:900,fontSize:18,color:"#e2e8f0",display:"flex",alignItems:"center",gap:8}},member.name,isMe&&React.createElement("span",{style:{fontSize:12,color:"#818cf8",background:"rgba(129,140,248,.18)",padding:"2px 8px",borderRadius:8}},"YOU")),
+              React.createElement("div",{style:{fontSize:13,color:"#64748b",marginTop:2}},modal.label.split("·")[1]?.trim())
+            )
+          ),
+          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:"#64748b",marginBottom:10}},"MARK STATUS"),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}},
+            Object.entries(STATUSES).filter(([k])=>k!=="unknown").map(([key,s])=>
+              React.createElement("button",{key,onClick:()=>setForm(f=>({...f,status:key})),style:{padding:"12px 10px",borderRadius:12,border:"2px solid "+(form.status===key?s.color:"#334155"),background:form.status===key?s.bg:"#0f172a",cursor:"pointer",display:"flex",alignItems:"center",gap:8,color:form.status===key?s.color:"#94a3b8",fontWeight:700,fontSize:14}},
+                React.createElement("span",{style:{fontSize:20}},s.emoji),s.label
+              )
+            )
+          ),
+          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:"#64748b",marginBottom:8}},"NOTE / REASON"),
+          React.createElement("textarea",{value:form.note,onChange:e=>setForm(f=>({...f,note:e.target.value})),placeholder:"e.g. Doctor appointment, client call...",style:{width:"100%",background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"12px 14px",color:"#e2e8f0",fontSize:14,resize:"none",height:76,boxSizing:"border-box",outline:"none",marginBottom:18}}),
+          React.createElement("div",{style:{display:"flex",gap:12}},
+            React.createElement("button",{onClick:()=>setModal(null),style:{flex:1,padding:"13px",borderRadius:12,border:"1px solid #334155",background:"transparent",color:"#64748b",cursor:"pointer",fontWeight:700,fontSize:15}},"Cancel"),
+            React.createElement("button",{onClick:saveModal,style:{flex:2,padding:"13px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#818cf8,#38bdf8)",color:"#fff",cursor:"pointer",fontWeight:900,fontSize:16}},syncing?"Saving...":"Save ✓")
+          )
+        )
+      );
+    })()
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
