@@ -11,9 +11,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; overflow: hidden; }
-    body { background: #0f172a; font-family: 'Segoe UI', sans-serif; }
-    #root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    html, body, #root { height: 100%; }
+    body { background: #0f172a; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
     textarea:focus { border-color: #818cf8 !important; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: #1e293b; }
@@ -24,7 +23,6 @@
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect } = React;
-
 firebase.initializeApp({ databaseURL: "https://team-presence-70858-default-rtdb.firebaseio.com" });
 const db = firebase.database();
 
@@ -56,9 +54,7 @@ const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
 const FULL_DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-function toKey(d) {
-  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-}
+function toKey(d) { return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function getWeekStart(offset=0) {
   const t=new Date(),day=t.getDay(),diff=day===0?-6:1-day,m=new Date(t);
   m.setDate(t.getDate()+diff+offset*7); m.setHours(0,0,0,0); return m;
@@ -117,14 +113,13 @@ function App() {
   const selectUser=(id)=>{ setCurrentUser(id); try{localStorage.setItem("tpr_user",id);}catch(_){} };
   const switchUser=()=>{ setCurrentUser(null); try{localStorage.removeItem("tpr_user");}catch(_){} };
 
-  // ── Welcome Screen ───────────────────────────────────────────────
   if(!currentUser) return React.createElement("div",{style:{background:"#0f172a",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}},
     React.createElement("div",{style:{textAlign:"center",maxWidth:480,width:"100%"}},
       React.createElement("div",{style:{fontSize:48,marginBottom:8}},"👋"),
       React.createElement("h2",{style:{color:"#e2e8f0",fontWeight:900,fontSize:26,margin:"0 0 6px"}},"Welcome!"),
       React.createElement("p",{style:{color:"#94a3b8",fontSize:15,marginBottom:28}},"Who are you? Pick your name to get started."),
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
-        TEAM.map((m,i)=>React.createElement("button",{key:m.id,onClick:()=>selectUser(m.id),style:{padding:"14px 12px",borderRadius:14,border:"1px solid #334155",background:"#1e293b",cursor:"pointer",display:"flex",alignItems:"center",gap:10,color:"#e2e8f0",width:"100%",transition:"all .2s"}},
+        TEAM.map((m,i)=>React.createElement("button",{key:m.id,onClick:()=>selectUser(m.id),style:{padding:"14px 12px",borderRadius:14,border:"1px solid #334155",background:"#1e293b",cursor:"pointer",display:"flex",alignItems:"center",gap:10,color:"#e2e8f0",width:"100%"}},
           React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:GRADIENTS[i],display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,color:"#fff",flexShrink:0}},m.avatar),
           React.createElement("div",{style:{textAlign:"left"}},
             React.createElement("div",{style:{fontWeight:700,fontSize:15}},m.name),
@@ -137,13 +132,12 @@ function App() {
 
   const meIndex=TEAM.findIndex(m=>m.id===currentUser),me=TEAM[meIndex];
 
-  // ── Main layout: flex column, full viewport, no scroll ──────────
-  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100vh",background:"#0f172a",color:"#e2e8f0",padding:"10px 14px",gap:6,overflow:"hidden"}},
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100vh",background:"#0f172a",color:"#e2e8f0",padding:"10px 14px",gap:7,overflow:"hidden"}},
 
     // Toast
     toast&&React.createElement("div",{style:{position:"fixed",top:12,right:12,background:"#22c55e",color:"#fff",padding:"10px 18px",borderRadius:12,fontWeight:700,zIndex:9999,fontSize:14}},toast),
 
-    // Header
+    // ── 1. HEADER ────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}},
       React.createElement("div",null,
         React.createElement("h1",{style:{margin:0,fontSize:20,fontWeight:900,background:"linear-gradient(135deg,#818cf8,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"🚀 Team Presence Radar"),
@@ -153,39 +147,20 @@ function App() {
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,background:"#1e293b",padding:"6px 12px",borderRadius:20}},
           React.createElement("div",{style:{width:28,height:28,borderRadius:"50%",background:GRADIENTS[meIndex],display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff"}},me.avatar),
           React.createElement("span",{style:{fontSize:13,fontWeight:700}},me.name)
-          ),
-
-          // Week Summary bar
-          view==="week"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:12,padding:"8px 12px",flexShrink:0}},
-            React.createElement("div",{style:{fontSize:11,fontWeight:800,color:"#64748b",marginBottom:6}},"📊 WEEK SUMMARY"),
-            React.createElement("div",{style:{display:"flex",gap:6}},
-              weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today;
-                return React.createElement("div",{key:i,style:{flex:1,background:isToday?"rgba(129,140,248,.12)":"#0f172a",borderRadius:10,padding:"6px 8px",border:isToday?"1px solid rgba(129,140,248,.4)":"1px solid transparent"}},
-                  React.createElement("div",{style:{fontSize:11,fontWeight:800,color:isToday?"#818cf8":"#64748b",marginBottom:3}},DAY_NAMES[i]),
-                  Object.entries(STATUSES).filter(([k])=>k!=="unknown"&&countForDay(key,k)>0).map(([k,s])=>
-                    React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:3,marginBottom:1}},
-                      React.createElement("span",{style:{fontSize:10}},s.emoji),
-                      React.createElement("span",{style:{fontSize:11,color:s.color,fontWeight:700}},countForDay(key,k))
-                    )
-                  )
-                );
-              })
-            )
-          )
         ),
         React.createElement("button",{onClick:switchUser,style:{padding:"6px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:12}},"Switch"),
         React.createElement("button",{onClick:()=>db.ref("presence").once("value",(snap)=>{ const val=snap.val(); if(val) setPresence(val); showToast("🔄 Refreshed!"); }),style:{padding:"6px 10px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:13}},"🔄")
       )
     ),
 
-    // Scorecards
+    // ── 2. SCORECARDS ────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center",flexShrink:0}},
       Object.entries(STATUSES).filter(([k])=>k!=="unknown").map(([key,s])=>
         React.createElement("button",{key,onClick:()=>setActiveFilter(activeFilter===key?"all":key),
           style:{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:20,
             border:"2px solid "+s.color,
             background:activeFilter===key?s.bg:"#1e293b",
-            cursor:"pointer",color:activeFilter===key?s.color:"#e2e8f0",transition:"all .2s"}},
+            cursor:"pointer",transition:"all .2s"}},
           React.createElement("span",{style:{fontSize:16}},s.emoji),
           React.createElement("span",{style:{fontWeight:900,fontSize:18,color:s.color}},todayCounts[key]),
           React.createElement("span",{style:{fontSize:12,fontWeight:700,color:activeFilter===key?s.color:"#94a3b8"}},s.label)
@@ -193,7 +168,7 @@ function App() {
       )
     ),
 
-    // View toggle + Nav
+    // ── 3. VIEW TOGGLE + NAV ─────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}},
       React.createElement("div",{style:{display:"flex",background:"#1e293b",borderRadius:10,padding:3,gap:2}},
         ["week","month"].map(v=>React.createElement("button",{key:v,onClick:()=>setView(v),style:{padding:"5px 14px",borderRadius:8,border:"none",background:v===view?"linear-gradient(135deg,#818cf8,#38bdf8)":"transparent",color:v===view?"#fff":"#64748b",fontWeight:700,cursor:"pointer",fontSize:13}},v==="week"?"📅 Week":"🗓 Month"))
@@ -206,16 +181,14 @@ function App() {
       )
     ),
 
-    // Calendar (flex:1 fills remaining space)
+    // ── 4. CALENDAR (flex:1) ─────────────────────────────────────
     loading
       ? React.createElement("div",{style:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:15}},"Connecting to Firebase...")
-      : React.createElement(React.Fragment,null,
-          React.createElement("div",{style:{flex:1,background:"#1e293b",borderRadius:14,padding:"10px 12px",overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}},
+      : React.createElement("div",{style:{flex:1,background:"#1e293b",borderRadius:14,padding:"10px 12px",overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}},
 
-          // ── WEEK VIEW ──────────────────────────────────────────
           view==="week"&&React.createElement(React.Fragment,null,
             // Day headers
-            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"130px repeat(5,1fr)",gap:4,marginBottom:6,flexShrink:0}},
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"130px repeat(5,1fr)",gap:4,marginBottom:5,flexShrink:0}},
               React.createElement("div",{style:{fontSize:11,color:"#475569",fontWeight:700,padding:"2px 6px"}},"MEMBER"),
               weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today;
                 return React.createElement("div",{key:i,style:{textAlign:"center",padding:"4px 2px",borderRadius:8,background:isToday?"rgba(129,140,248,.18)":"transparent",border:isToday?"1px solid rgba(129,140,248,.5)":"1px solid transparent"}},
@@ -225,11 +198,10 @@ function App() {
                 );
               })
             ),
-            // Rows — flex:1 fills remaining, each row gets equal share
+            // Member rows — each gets equal flex share
             React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column",gap:4,minHeight:0}},
               filteredTeam.map((member)=>{ const mi=TEAM.findIndex(t=>t.id===member.id),isMe=member.id===currentUser;
                 return React.createElement("div",{key:member.id,style:{flex:1,display:"grid",gridTemplateColumns:"130px repeat(5,1fr)",gap:4,minHeight:0}},
-                  // Name cell
                   React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,padding:"4px 6px",borderRadius:8,background:isMe?"rgba(129,140,248,.1)":"transparent"}},
                     React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:GRADIENTS[mi],display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff",flexShrink:0,border:isMe?"2px solid #818cf8":"2px solid transparent"}},member.avatar),
                     React.createElement("div",null,
@@ -237,14 +209,13 @@ function App() {
                       React.createElement("div",{style:{fontSize:10,color:isMe?"#818cf8":"#475569"}},isMe?"● YOU":member.role)
                     )
                   ),
-                  // Status cells
                   weekDays.map((d,di)=>{ const key=toKey(d),entry=getEntry(member.id,key),s=STATUSES[entry.status]||STATUSES.unknown,isToday=key===today;
                     return React.createElement("button",{key:di,
                       onClick:()=>openModal(member.id,key,member.name+" · "+FULL_DAY_NAMES[di]+", "+d.getDate()+" "+MONTHS[d.getMonth()].slice(0,3)),
                       style:{borderRadius:10,border:isToday?"2px solid "+s.color:"2px solid transparent",background:s.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,width:"100%",height:"100%",outline:isMe?"2px solid rgba(129,140,248,.35)":"none",outlineOffset:1,transition:"transform .15s"}},
                       React.createElement("span",{style:{fontSize:20}},s.emoji),
                       React.createElement("span",{style:{fontSize:11,fontWeight:800,color:s.color,textAlign:"center",lineHeight:1.2}},s.label.replace("Planned ","")),
-                      entry.updatedAt&&React.createElement("span",{style:{fontSize:9,color:"#fff",background:"rgba(0,0,0,0.4)",borderRadius:5,padding:"1px 5px",fontWeight:700,marginTop:1}},timeAgo(entry.updatedAt)),
+                      entry.updatedAt&&React.createElement("span",{style:{fontSize:9,color:"#fff",background:"rgba(0,0,0,0.45)",borderRadius:5,padding:"1px 5px",fontWeight:700,marginTop:1}},timeAgo(entry.updatedAt)),
                       entry.note&&React.createElement("span",{style:{fontSize:9}},"📝")
                     );
                   })
@@ -253,7 +224,6 @@ function App() {
             )
           ),
 
-          // ── MONTH VIEW ────────────────────────────────────────
           view==="month"&&React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column",gap:3,minHeight:0}},
             React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,flexShrink:0}},
               ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>React.createElement("div",{key:d,style:{textAlign:"center",fontSize:11,fontWeight:800,color:d==="Sat"||d==="Sun"?"#334155":"#64748b",padding:"3px 0"}},d))
@@ -278,7 +248,35 @@ function App() {
           )
         ),
 
-    // ── Modal ─────────────────────────────────────────────────────
+    // ── 5. WEEK SUMMARY ──────────────────────────────────────────
+    view==="week"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:12,padding:"8px 12px",flexShrink:0}},
+      React.createElement("div",{style:{fontSize:11,fontWeight:800,color:"#64748b",marginBottom:6}},"📊 WEEK SUMMARY"),
+      React.createElement("div",{style:{display:"flex",gap:6}},
+        weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today;
+          return React.createElement("div",{key:i,style:{flex:1,background:isToday?"rgba(129,140,248,.12)":"#0f172a",borderRadius:10,padding:"6px 8px",border:isToday?"1px solid rgba(129,140,248,.4)":"1px solid transparent"}},
+            React.createElement("div",{style:{fontSize:11,fontWeight:800,color:isToday?"#818cf8":"#64748b",marginBottom:3}},DAY_NAMES[i]),
+            Object.entries(STATUSES).filter(([k])=>k!=="unknown"&&countForDay(key,k)>0).map(([k,s])=>
+              React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:3,marginBottom:1}},
+                React.createElement("span",{style:{fontSize:10}},s.emoji),
+                React.createElement("span",{style:{fontSize:11,color:s.color,fontWeight:700}},countForDay(key,k))
+              )
+            )
+          );
+        })
+      )
+    ),
+
+    // ── 6. LEGEND ────────────────────────────────────────────────
+    React.createElement("div",{style:{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center",flexShrink:0}},
+      Object.entries(STATUSES).map(([k,s])=>
+        React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:4}},
+          React.createElement("span",{style:{fontSize:13}},s.emoji),
+          React.createElement("span",{style:{fontSize:11,color:"#64748b",fontWeight:600}},s.label)
+        )
+      )
+    ),
+
+    // ── MODAL ─────────────────────────────────────────────────────
     modal&&(()=>{ const member=TEAM.find(m=>m.id===modal.memberId),mi=TEAM.findIndex(m=>m.id===modal.memberId),isMe=modal.memberId===currentUser;
       return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}},
         React.createElement("div",{style:{background:"#1e293b",borderRadius:20,padding:22,width:"100%",maxWidth:400,border:"1px solid #334155"}},
