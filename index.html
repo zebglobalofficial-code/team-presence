@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Team Presence Radar</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -11,9 +11,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
     body { background: #0f172a; font-family: 'Segoe UI', sans-serif; }
+    #root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
     textarea:focus { border-color: #818cf8 !important; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: #1e293b; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
   </style>
@@ -21,7 +23,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect } = React;
 
 firebase.initializeApp({ databaseURL: "https://team-presence-70858-default-rtdb.firebaseio.com" });
 const db = firebase.database();
@@ -54,24 +56,12 @@ const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
 const FULL_DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-function timeAgo(iso) {
-  if (!iso) return null;
-  const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return Math.floor(diff/60)+"m ago";
-  if (diff < 86400) return Math.floor(diff/3600)+"h ago";
-  const d = new Date(iso);
-  return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
-}
 function toKey(d) {
-  const yr = d.getFullYear();
-  const mo = String(d.getMonth()+1).padStart(2,"0");
-  const dy = String(d.getDate()).padStart(2,"0");
-  return yr+"-"+mo+"-"+dy;
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
 function getWeekStart(offset=0) {
-  const today=new Date(),day=today.getDay(),diff=day===0?-6:1-day,m=new Date(today);
-  m.setDate(today.getDate()+diff+offset*7); m.setHours(0,0,0,0); return m;
+  const t=new Date(),day=t.getDay(),diff=day===0?-6:1-day,m=new Date(t);
+  m.setDate(t.getDate()+diff+offset*7); m.setHours(0,0,0,0); return m;
 }
 function getWeekDays(ws) { return Array.from({length:5},(_,i)=>{ const d=new Date(ws); d.setDate(ws.getDate()+i); return d; }); }
 function getMonthWeeks(md) {
@@ -81,6 +71,15 @@ function getMonthWeeks(md) {
   const weeks=[]; let cur=new Date(start);
   while(cur<=lastDay||weeks.length<4){ weeks.push(Array.from({length:7},(_,i)=>{ const d=new Date(cur); d.setDate(cur.getDate()+i); return d; })); cur.setDate(cur.getDate()+7); if(cur>lastDay&&weeks.length>=4) break; }
   return weeks;
+}
+function timeAgo(iso) {
+  if(!iso) return null;
+  const diff=Math.floor((Date.now()-new Date(iso))/1000);
+  if(diff<60) return "Just now";
+  if(diff<3600) return Math.floor(diff/60)+"m ago";
+  if(diff<86400) return Math.floor(diff/3600)+"h ago";
+  const d=new Date(iso);
+  return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
 }
 
 function App() {
@@ -100,182 +99,189 @@ function App() {
   const monthDate=new Date(new Date().getFullYear(),new Date().getMonth()+monthOffset,1);
   const monthLabel=MONTHS[monthDate.getMonth()]+" "+monthDate.getFullYear();
 
-  // ── Firebase real-time listener ──────────────────────────────────
   useEffect(()=>{
     const ref=db.ref("presence");
     ref.on("value",(snap)=>{ const val=snap.val(); if(val) setPresence(val); setLoading(false); });
     return ()=>ref.off();
   },[]);
 
-  const saveData=(np)=>{
-    setSyncing(true);
-    db.ref("presence").set(np).then(()=>setSyncing(false)).catch(()=>setSyncing(false));
-  };
-
+  const saveData=(np)=>{ setSyncing(true); db.ref("presence").set(np).then(()=>setSyncing(false)).catch(()=>setSyncing(false)); };
   const getEntry=(mid,dk)=>presence[mid]?.[dk]||{status:"unknown",note:""};
   const countForDay=(dk,sk)=>TEAM.filter(m=>getEntry(m.id,dk).status===sk).length;
   const todayCounts=Object.fromEntries(Object.keys(STATUSES).map(s=>[s,TEAM.filter(m=>getEntry(m.id,today).status===s).length]));
   const filteredTeam=activeFilter==="all"?TEAM:TEAM.filter(m=>getEntry(m.id,today).status===activeFilter);
-
   const weekLabel=()=>{ const end=new Date(weekStart); end.setDate(weekStart.getDate()+4); if(weekOffset===0)return "This Week"; if(weekOffset===1)return "Next Week"; if(weekOffset===-1)return "Last Week"; return weekStart.getDate()+" "+MONTHS[weekStart.getMonth()].slice(0,3)+" - "+end.getDate()+" "+MONTHS[end.getMonth()].slice(0,3); };
   const showToast=msg=>{ setToast(msg); setTimeout(()=>setToast(null),3000); };
   const openModal=(mid,dk,label)=>{ const cur=getEntry(mid,dk); setForm({status:cur.status==="unknown"?"office":cur.status,note:cur.note||""}); setModal({memberId:mid,dateKey:dk,label}); };
-  const saveModal=()=>{ const updated={...presence,[modal.memberId]:{...(presence[modal.memberId]||{}),[modal.dateKey]:{status:form.status,note:form.note,updatedAt:new Date().toISOString()}}}; setPresence(updated); saveData(updated); showToast("✅ Status saved & synced!"); setModal(null); };
+  const saveModal=()=>{ const updated={...presence,[modal.memberId]:{...(presence[modal.memberId]||{}),[modal.dateKey]:{status:form.status,note:form.note,updatedAt:new Date().toISOString()}}}; setPresence(updated); saveData(updated); showToast("✅ Saved & synced!"); setModal(null); };
   const selectUser=(id)=>{ setCurrentUser(id); try{localStorage.setItem("tpr_user",id);}catch(_){} };
   const switchUser=()=>{ setCurrentUser(null); try{localStorage.removeItem("tpr_user");}catch(_){} };
 
-  if(!currentUser) return (
-    React.createElement("div",{style:{background:"#0f172a",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}},
-      React.createElement("div",{style:{textAlign:"center",maxWidth:480,width:"100%"}},
-        React.createElement("div",{style:{fontSize:56,marginBottom:10}},"👋"),
-        React.createElement("h2",{style:{color:"#e2e8f0",fontWeight:900,fontSize:28,margin:"0 0 8px"}},"Welcome!"),
-        React.createElement("p",{style:{color:"#94a3b8",fontSize:16,marginBottom:32}},"Who are you? Pick your name to get started."),
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
-          TEAM.map((m,i)=>React.createElement("button",{key:m.id,onClick:()=>selectUser(m.id),style:{padding:"18px 14px",borderRadius:16,border:"1px solid #334155",background:"#1e293b",cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"#e2e8f0",width:"100%"}},
-            React.createElement("div",{style:{width:48,height:48,borderRadius:"50%",background:GRADIENTS[i],display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:14,color:"#fff",flexShrink:0}},m.avatar),
-            React.createElement("div",{style:{textAlign:"left"}},
-              React.createElement("div",{style:{fontWeight:700,fontSize:16}},m.name),
-              React.createElement("div",{style:{fontSize:13,color:"#64748b"}},m.role)
-            )
-          ))
-        )
+  // ── Welcome Screen ───────────────────────────────────────────────
+  if(!currentUser) return React.createElement("div",{style:{background:"#0f172a",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}},
+    React.createElement("div",{style:{textAlign:"center",maxWidth:480,width:"100%"}},
+      React.createElement("div",{style:{fontSize:48,marginBottom:8}},"👋"),
+      React.createElement("h2",{style:{color:"#e2e8f0",fontWeight:900,fontSize:26,margin:"0 0 6px"}},"Welcome!"),
+      React.createElement("p",{style:{color:"#94a3b8",fontSize:15,marginBottom:28}},"Who are you? Pick your name to get started."),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        TEAM.map((m,i)=>React.createElement("button",{key:m.id,onClick:()=>selectUser(m.id),style:{padding:"14px 12px",borderRadius:14,border:"1px solid #334155",background:"#1e293b",cursor:"pointer",display:"flex",alignItems:"center",gap:10,color:"#e2e8f0",width:"100%",transition:"all .2s"}},
+          React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:GRADIENTS[i],display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,color:"#fff",flexShrink:0}},m.avatar),
+          React.createElement("div",{style:{textAlign:"left"}},
+            React.createElement("div",{style:{fontWeight:700,fontSize:15}},m.name),
+            React.createElement("div",{style:{fontSize:12,color:"#64748b"}},m.role)
+          )
+        ))
       )
     )
   );
 
   const meIndex=TEAM.findIndex(m=>m.id===currentUser),me=TEAM[meIndex];
 
-  return React.createElement("div",{style:{fontFamily:"'Segoe UI',sans-serif",background:"#0f172a",minHeight:"100vh",color:"#e2e8f0",padding:"18px 16px"}},
-    toast&&React.createElement("div",{style:{position:"fixed",top:16,right:16,background:"#22c55e",color:"#fff",padding:"12px 22px",borderRadius:14,fontWeight:700,zIndex:9999,fontSize:15}},toast),
-    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}},
+  // ── Main layout: flex column, full viewport, no scroll ──────────
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100vh",background:"#0f172a",color:"#e2e8f0",padding:"10px 14px",gap:6,overflow:"hidden"}},
+
+    // Toast
+    toast&&React.createElement("div",{style:{position:"fixed",top:12,right:12,background:"#22c55e",color:"#fff",padding:"10px 18px",borderRadius:12,fontWeight:700,zIndex:9999,fontSize:14}},toast),
+
+    // Header
+    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}},
       React.createElement("div",null,
-        React.createElement("h1",{style:{margin:0,fontSize:24,fontWeight:900,background:"linear-gradient(135deg,#818cf8,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"🚀 Team Presence Radar"),
-        React.createElement("p",{style:{margin:"3px 0 0",color:"#64748b",fontSize:13}},"Dhanasekar's Team · "+(syncing?"⏳ Syncing...":"🔥 Live"))
+        React.createElement("h1",{style:{margin:0,fontSize:20,fontWeight:900,background:"linear-gradient(135deg,#818cf8,#38bdf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"🚀 Team Presence Radar"),
+        React.createElement("p",{style:{margin:0,color:"#64748b",fontSize:11}},"Dhanasekar's Team · "+(syncing?"⏳ Syncing...":"🔥 Live"))
       ),
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,background:"#1e293b",padding:"8px 14px",borderRadius:22}},
-          React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:GRADIENTS[meIndex],display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff"}},me.avatar),
-          React.createElement("span",{style:{fontSize:14,fontWeight:700}},me.name)
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,background:"#1e293b",padding:"6px 12px",borderRadius:20}},
+          React.createElement("div",{style:{width:28,height:28,borderRadius:"50%",background:GRADIENTS[meIndex],display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff"}},me.avatar),
+          React.createElement("span",{style:{fontSize:13,fontWeight:700}},me.name)
         ),
-        React.createElement("button",{onClick:switchUser,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:13}},"Switch"),
-        React.createElement("button",{onClick:()=>db.ref("presence").once("value",(snap)=>{ const val=snap.val(); if(val) setPresence(val); showToast("🔄 Refreshed!"); }),style:{padding:"8px 12px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:15},title:"Refresh"},"🔄")
+        React.createElement("button",{onClick:switchUser,style:{padding:"6px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:12}},"Switch"),
+        React.createElement("button",{onClick:()=>db.ref("presence").once("value",(snap)=>{ const val=snap.val(); if(val) setPresence(val); showToast("🔄 Refreshed!"); }),style:{padding:"6px 10px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:13}},"🔄")
       )
     ),
-    React.createElement("div",{style:{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap",justifyContent:"center"}},
+
+    // Scorecards
+    React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center",flexShrink:0}},
       Object.entries(STATUSES).filter(([k])=>k!=="unknown").map(([key,s])=>
-        React.createElement("button",{key,onClick:()=>setActiveFilter(activeFilter===key?"all":key),style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:22,border:"2px solid "+(activeFilter===key?s.color:s.color+"88"),background:activeFilter===key?s.bg:s.bg+"99",cursor:"pointer",color:s.color,transition:"all .2s"}},
-          React.createElement("span",{style:{fontSize:18}},s.emoji),
-          React.createElement("span",{style:{fontWeight:900,fontSize:22}},todayCounts[key]),
-          React.createElement("span",{style:{fontSize:13,fontWeight:700}},s.label)
+        React.createElement("button",{key,onClick:()=>setActiveFilter(activeFilter===key?"all":key),
+          style:{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:20,
+            border:"2px solid "+(activeFilter===key?s.color:s.color+"99"),
+            background:activeFilter===key?s.bg:s.bg+"cc",
+            cursor:"pointer",color:s.color,transition:"all .2s"}},
+          React.createElement("span",{style:{fontSize:16}},s.emoji),
+          React.createElement("span",{style:{fontWeight:900,fontSize:18}},todayCounts[key]),
+          React.createElement("span",{style:{fontSize:12,fontWeight:700}},s.label)
         )
       )
     ),
-    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}},
-      React.createElement("div",{style:{display:"flex",background:"#1e293b",borderRadius:12,padding:4,gap:3}},
-        ["week","month"].map(v=>React.createElement("button",{key:v,onClick:()=>setView(v),style:{padding:"8px 18px",borderRadius:10,border:"none",background:v===view?"linear-gradient(135deg,#818cf8,#38bdf8)":"transparent",color:v===view?"#fff":"#64748b",fontWeight:700,cursor:"pointer",fontSize:14}},v==="week"?"📅 Week":"🗓 Month"))
+
+    // View toggle + Nav
+    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}},
+      React.createElement("div",{style:{display:"flex",background:"#1e293b",borderRadius:10,padding:3,gap:2}},
+        ["week","month"].map(v=>React.createElement("button",{key:v,onClick:()=>setView(v),style:{padding:"5px 14px",borderRadius:8,border:"none",background:v===view?"linear-gradient(135deg,#818cf8,#38bdf8)":"transparent",color:v===view?"#fff":"#64748b",fontWeight:700,cursor:"pointer",fontSize:13}},v==="week"?"📅 Week":"🗓 Month"))
       ),
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-        React.createElement("button",{onClick:()=>view==="week"?setWeekOffset(w=>w-1):setMonthOffset(m=>m-1),style:{width:36,height:36,borderRadius:"50%",border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}},"‹"),
-        React.createElement("button",{onClick:()=>{setWeekOffset(0);setMonthOffset(0);},style:{padding:"7px 16px",borderRadius:10,border:"1px solid #334155",background:"#1e293b",color:"#818cf8",cursor:"pointer",fontSize:14,fontWeight:700}},"Today"),
-        React.createElement("span",{style:{fontSize:15,fontWeight:700,color:"#e2e8f0",minWidth:130,textAlign:"center"}},view==="week"?weekLabel():monthLabel),
-        React.createElement("button",{onClick:()=>view==="week"?setWeekOffset(w=>w+1):setMonthOffset(m=>m+1),style:{width:36,height:36,borderRadius:"50%",border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}},"›")
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+        React.createElement("button",{onClick:()=>view==="week"?setWeekOffset(w=>w-1):setMonthOffset(m=>m-1),style:{width:30,height:30,borderRadius:"50%",border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}},"‹"),
+        React.createElement("button",{onClick:()=>{setWeekOffset(0);setMonthOffset(0);},style:{padding:"5px 12px",borderRadius:8,border:"1px solid #334155",background:"#1e293b",color:"#818cf8",cursor:"pointer",fontSize:13,fontWeight:700}},"Today"),
+        React.createElement("span",{style:{fontSize:13,fontWeight:700,color:"#e2e8f0",minWidth:110,textAlign:"center"}},view==="week"?weekLabel():monthLabel),
+        React.createElement("button",{onClick:()=>view==="week"?setWeekOffset(w=>w+1):setMonthOffset(m=>m+1),style:{width:30,height:30,borderRadius:"50%",border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}},"›")
       )
     ),
-    loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:"#64748b",fontSize:16}},"Connecting to Firebase..."):
-    React.createElement(React.Fragment,null,
-      view==="week"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:18,padding:16,overflowX:"auto"}},
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"150px repeat(5,1fr)",gap:6,marginBottom:10}},
-          React.createElement("div",{style:{fontSize:13,color:"#475569",padding:"4px 8px",fontWeight:700}},"MEMBER"),
-          weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today; return React.createElement("div",{key:i,style:{textAlign:"center",padding:"8px 4px",borderRadius:10,background:isToday?"rgba(129,140,248,.18)":"transparent",border:isToday?"1px solid rgba(129,140,248,.5)":"1px solid transparent"}},
-            React.createElement("div",{style:{fontSize:13,fontWeight:800,color:isToday?"#818cf8":"#64748b"}},DAY_NAMES[i]),
-            React.createElement("div",{style:{fontSize:18,fontWeight:900,color:isToday?"#e2e8f0":"#94a3b8"}},d.getDate()),
-            React.createElement("div",{style:{fontSize:11,color:"#22c55e",fontWeight:600}},"🏢 "+countForDay(key,"office"))
-          ); })
-        ),
-        filteredTeam.map((member)=>{ const mi=TEAM.findIndex(t=>t.id===member.id),isMe=member.id===currentUser;
-          return React.createElement("div",{key:member.id,style:{display:"grid",gridTemplateColumns:"150px repeat(5,1fr)",gap:6,marginBottom:8}},
-            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"6px 8px",borderRadius:10,background:isMe?"rgba(129,140,248,.1)":"transparent"}},
-              React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:GRADIENTS[mi],display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0,border:isMe?"2px solid #818cf8":"2px solid transparent"}},member.avatar),
-              React.createElement("div",null,
-                React.createElement("div",{style:{fontSize:14,fontWeight:700,color:isMe?"#818cf8":"#e2e8f0",lineHeight:1.2}},member.name),
-                React.createElement("div",{style:{fontSize:11,color:isMe?"#818cf8":"#475569"}},isMe?"● YOU":member.role)
-              )
+
+    // Calendar (flex:1 fills remaining space)
+    loading
+      ? React.createElement("div",{style:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:15}},"Connecting to Firebase...")
+      : React.createElement("div",{style:{flex:1,background:"#1e293b",borderRadius:14,padding:"10px 12px",overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}},
+
+          // ── WEEK VIEW ──────────────────────────────────────────
+          view==="week"&&React.createElement(React.Fragment,null,
+            // Day headers
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"130px repeat(5,1fr)",gap:4,marginBottom:6,flexShrink:0}},
+              React.createElement("div",{style:{fontSize:11,color:"#475569",fontWeight:700,padding:"2px 6px"}},"MEMBER"),
+              weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today;
+                return React.createElement("div",{key:i,style:{textAlign:"center",padding:"4px 2px",borderRadius:8,background:isToday?"rgba(129,140,248,.18)":"transparent",border:isToday?"1px solid rgba(129,140,248,.5)":"1px solid transparent"}},
+                  React.createElement("div",{style:{fontSize:11,fontWeight:800,color:isToday?"#818cf8":"#64748b"}},DAY_NAMES[i]),
+                  React.createElement("div",{style:{fontSize:16,fontWeight:900,color:isToday?"#e2e8f0":"#94a3b8"}},d.getDate()),
+                  React.createElement("div",{style:{fontSize:10,color:"#22c55e",fontWeight:600}},"🏢"+countForDay(key,"office"))
+                );
+              })
             ),
-            weekDays.map((d,di)=>{ const key=toKey(d),entry=getEntry(member.id,key),s=STATUSES[entry.status]||STATUSES.unknown,isToday=key===today;
-              return React.createElement("button",{key:di,onClick:()=>openModal(member.id,key,member.name+" · "+FULL_DAY_NAMES[di]+", "+d.getDate()+" "+MONTHS[d.getMonth()].slice(0,3)),style:{padding:"8px 4px",borderRadius:12,border:isToday?"2px solid "+s.color:"2px solid transparent",background:s.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minHeight:64,outline:isMe?"2px solid rgba(129,140,248,.35)":"none",outlineOffset:2}},
-                React.createElement("span",{style:{fontSize:26}},s.emoji),
-                React.createElement("span",{style:{fontSize:13,fontWeight:800,color:s.color,textAlign:"center",lineHeight:1.3}},s.label.replace("Planned ","")),
-                entry.updatedAt&&React.createElement("span",{style:{fontSize:10,color:"#fff",background:"rgba(0,0,0,0.45)",borderRadius:6,padding:"2px 7px",marginTop:2,fontWeight:700,letterSpacing:"0.2px"}},timeAgo(entry.updatedAt)),
-                entry.note&&React.createElement("span",{style:{fontSize:12}},"📝")
-              );
-            })
-          );
-        })
-      ),
-      view==="month"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:18,padding:16,overflowX:"auto"}},
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:8}},
-          ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>React.createElement("div",{key:d,style:{textAlign:"center",fontSize:13,fontWeight:800,color:d==="Sat"||d==="Sun"?"#334155":"#64748b",padding:"5px 0"}},d))
+            // Rows — flex:1 fills remaining, each row gets equal share
+            React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column",gap:4,minHeight:0}},
+              filteredTeam.map((member)=>{ const mi=TEAM.findIndex(t=>t.id===member.id),isMe=member.id===currentUser;
+                return React.createElement("div",{key:member.id,style:{flex:1,display:"grid",gridTemplateColumns:"130px repeat(5,1fr)",gap:4,minHeight:0}},
+                  // Name cell
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,padding:"4px 6px",borderRadius:8,background:isMe?"rgba(129,140,248,.1)":"transparent"}},
+                    React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:GRADIENTS[mi],display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff",flexShrink:0,border:isMe?"2px solid #818cf8":"2px solid transparent"}},member.avatar),
+                    React.createElement("div",null,
+                      React.createElement("div",{style:{fontSize:12,fontWeight:700,color:isMe?"#818cf8":"#e2e8f0",lineHeight:1.2}},member.name),
+                      React.createElement("div",{style:{fontSize:10,color:isMe?"#818cf8":"#475569"}},isMe?"● YOU":member.role)
+                    )
+                  ),
+                  // Status cells
+                  weekDays.map((d,di)=>{ const key=toKey(d),entry=getEntry(member.id,key),s=STATUSES[entry.status]||STATUSES.unknown,isToday=key===today;
+                    return React.createElement("button",{key:di,
+                      onClick:()=>openModal(member.id,key,member.name+" · "+FULL_DAY_NAMES[di]+", "+d.getDate()+" "+MONTHS[d.getMonth()].slice(0,3)),
+                      style:{borderRadius:10,border:isToday?"2px solid "+s.color:"2px solid transparent",background:s.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,width:"100%",height:"100%",outline:isMe?"2px solid rgba(129,140,248,.35)":"none",outlineOffset:1,transition:"transform .15s"}},
+                      React.createElement("span",{style:{fontSize:20}},s.emoji),
+                      React.createElement("span",{style:{fontSize:11,fontWeight:800,color:s.color,textAlign:"center",lineHeight:1.2}},s.label.replace("Planned ","")),
+                      entry.updatedAt&&React.createElement("span",{style:{fontSize:9,color:"#fff",background:"rgba(0,0,0,0.4)",borderRadius:5,padding:"1px 5px",fontWeight:700,marginTop:1}},timeAgo(entry.updatedAt)),
+                      entry.note&&React.createElement("span",{style:{fontSize:9}},"📝")
+                    );
+                  })
+                );
+              })
+            )
+          ),
+
+          // ── MONTH VIEW ────────────────────────────────────────
+          view==="month"&&React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column",gap:3,minHeight:0}},
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,flexShrink:0}},
+              ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>React.createElement("div",{key:d,style:{textAlign:"center",fontSize:11,fontWeight:800,color:d==="Sat"||d==="Sun"?"#334155":"#64748b",padding:"3px 0"}},d))
+            ),
+            React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column",gap:3,minHeight:0}},
+              getMonthWeeks(monthDate).map((week,wi)=>React.createElement("div",{key:wi,style:{flex:1,display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,minHeight:0}},
+                week.map((d,di)=>{ const key=toKey(d),isThisMonth=d.getMonth()===monthDate.getMonth(),isToday=key===today,isWeekend=di>=5;
+                  return React.createElement("div",{key:di,
+                    onClick:()=>{if(!isWeekend&&isThisMonth){setView("week");setWeekOffset(Math.round((d-new Date(getWeekStart(0)))/604800000));}},
+                    style:{borderRadius:10,background:isToday?"rgba(129,140,248,.2)":isThisMonth&&!isWeekend?"#0f172a":"transparent",border:isToday?"1px solid rgba(129,140,248,.6)":"1px solid #334155",padding:"5px 6px",cursor:!isWeekend&&isThisMonth?"pointer":"default",opacity:isThisMonth?1:0.25,display:"flex",flexDirection:"column",gap:2}},
+                    React.createElement("div",{style:{fontSize:13,fontWeight:isToday?900:600,color:isToday?"#818cf8":isWeekend?"#334155":"#94a3b8"}},d.getDate()),
+                    !isWeekend&&isThisMonth&&React.createElement("div",null,
+                      countForDay(key,"office")>0&&React.createElement("div",{style:{fontSize:10,color:"#22c55e",fontWeight:700}},"🏢"+countForDay(key,"office")),
+                      (countForDay(key,"wfh")+countForDay(key,"wfh_planned"))>0&&React.createElement("div",{style:{fontSize:10,color:"#3b82f6",fontWeight:700}},"🏠"+(countForDay(key,"wfh")+countForDay(key,"wfh_planned"))),
+                      (countForDay(key,"leave")+countForDay(key,"sick"))>0&&React.createElement("div",{style:{fontSize:10,color:"#f59e0b",fontWeight:700}},"🌴"+(countForDay(key,"leave")+countForDay(key,"sick")))
+                    )
+                  );
+                })
+              ))
+            ),
+            React.createElement("p",{style:{textAlign:"center",fontSize:11,color:"#64748b",flexShrink:0,paddingTop:4}},"👆 Click any weekday to jump to that week")
+          )
         ),
-        getMonthWeeks(monthDate).map((week,wi)=>React.createElement("div",{key:wi,style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:5}},
-          week.map((d,di)=>{ const key=toKey(d),isThisMonth=d.getMonth()===monthDate.getMonth(),isToday=key===today,isWeekend=di>=5;
-            return React.createElement("div",{key:di,onClick:()=>{if(!isWeekend&&isThisMonth){setView("week");setWeekOffset(Math.round((d-new Date(getWeekStart(0)))/604800000));}},style:{minHeight:68,borderRadius:12,background:isToday?"rgba(129,140,248,.2)":isThisMonth&&!isWeekend?"#0f172a":"transparent",border:isToday?"1px solid rgba(129,140,248,.6)":"1px solid #1e293b",padding:"6px 7px",cursor:!isWeekend&&isThisMonth?"pointer":"default",opacity:isThisMonth?1:0.25}},
-              React.createElement("div",{style:{fontSize:14,fontWeight:isToday?900:600,color:isToday?"#818cf8":isWeekend?"#334155":"#94a3b8",marginBottom:3}},d.getDate()),
-              !isWeekend&&isThisMonth&&React.createElement("div",null,
-                countForDay(key,"office")>0&&React.createElement("div",{style:{fontSize:11,color:"#22c55e",fontWeight:700}},"🏢"+countForDay(key,"office")),
-                (countForDay(key,"wfh")+countForDay(key,"wfh_planned"))>0&&React.createElement("div",{style:{fontSize:11,color:"#3b82f6",fontWeight:700}},"🏠"+(countForDay(key,"wfh")+countForDay(key,"wfh_planned"))),
-                (countForDay(key,"leave")+countForDay(key,"sick"))>0&&React.createElement("div",{style:{fontSize:11,color:"#f59e0b",fontWeight:700}},"🌴"+(countForDay(key,"leave")+countForDay(key,"sick")))
-              )
-            );
-          })
-        )),
-        React.createElement("p",{style:{textAlign:"center",fontSize:13,color:"#64748b",marginTop:8}},"👆 Click any weekday to jump to that week")
-      ),
-      view==="week"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:14,padding:"12px 16px",marginTop:14}},
-        React.createElement("div",{style:{fontSize:13,fontWeight:800,color:"#64748b",marginBottom:10}},"📊 WEEK SUMMARY"),
-        React.createElement("div",{style:{display:"flex",gap:8,overflowX:"auto"}},
-          weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today;
-            return React.createElement("div",{key:i,style:{flex:"0 0 auto",minWidth:88,background:isToday?"rgba(129,140,248,.12)":"#0f172a",borderRadius:12,padding:"8px 10px",border:isToday?"1px solid rgba(129,140,248,.4)":"1px solid transparent"}},
-              React.createElement("div",{style:{fontSize:13,fontWeight:800,color:isToday?"#818cf8":"#64748b",marginBottom:5}},DAY_NAMES[i]),
-              Object.entries(STATUSES).filter(([k])=>k!=="unknown"&&countForDay(key,k)>0).map(([k,s])=>
-                React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:4,marginBottom:2}},
-                  React.createElement("span",{style:{fontSize:12}},s.emoji),
-                  React.createElement("span",{style:{fontSize:13,color:s.color,fontWeight:700}},countForDay(key,k))
-                )
-              )
-            );
-          })
-        )
-      ),
-      React.createElement("div",{style:{display:"flex",gap:14,marginTop:14,flexWrap:"wrap",justifyContent:"center"}},
-        Object.entries(STATUSES).map(([k,s])=>React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:5}},
-          React.createElement("span",{style:{fontSize:15}},s.emoji),
-          React.createElement("span",{style:{fontSize:13,color:"#64748b",fontWeight:600}},s.label)
-        ))
-      )
-    ),
+
+    // ── Modal ─────────────────────────────────────────────────────
     modal&&(()=>{ const member=TEAM.find(m=>m.id===modal.memberId),mi=TEAM.findIndex(m=>m.id===modal.memberId),isMe=modal.memberId===currentUser;
       return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}},
-        React.createElement("div",{style:{background:"#1e293b",borderRadius:22,padding:26,width:"100%",maxWidth:420,border:"1px solid #334155"}},
-          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:14,marginBottom:22}},
-            React.createElement("div",{style:{width:52,height:52,borderRadius:"50%",background:GRADIENTS[mi],display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:15,color:"#fff"}},member.avatar),
+        React.createElement("div",{style:{background:"#1e293b",borderRadius:20,padding:22,width:"100%",maxWidth:400,border:"1px solid #334155"}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:18}},
+            React.createElement("div",{style:{width:46,height:46,borderRadius:"50%",background:GRADIENTS[mi],display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:14,color:"#fff"}},member.avatar),
             React.createElement("div",null,
-              React.createElement("div",{style:{fontWeight:900,fontSize:18,color:"#e2e8f0",display:"flex",alignItems:"center",gap:8}},member.name,isMe&&React.createElement("span",{style:{fontSize:12,color:"#818cf8",background:"rgba(129,140,248,.18)",padding:"2px 8px",borderRadius:8}},"YOU")),
-              React.createElement("div",{style:{fontSize:13,color:"#64748b",marginTop:2}},modal.label.split("·")[1]?.trim())
+              React.createElement("div",{style:{fontWeight:900,fontSize:16,color:"#e2e8f0",display:"flex",alignItems:"center",gap:8}},member.name,isMe&&React.createElement("span",{style:{fontSize:11,color:"#818cf8",background:"rgba(129,140,248,.18)",padding:"2px 7px",borderRadius:7}},"YOU")),
+              React.createElement("div",{style:{fontSize:12,color:"#64748b",marginTop:2}},modal.label.split("·")[1]?.trim())
             )
           ),
-          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:"#64748b",marginBottom:10}},"MARK STATUS"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}},
+          React.createElement("div",{style:{fontSize:12,fontWeight:800,color:"#64748b",marginBottom:8}},"MARK STATUS"),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}},
             Object.entries(STATUSES).filter(([k])=>k!=="unknown").map(([key,s])=>
-              React.createElement("button",{key,onClick:()=>setForm(f=>({...f,status:key})),style:{padding:"12px 10px",borderRadius:12,border:"2px solid "+(form.status===key?s.color:"#334155"),background:form.status===key?s.bg:"#0f172a",cursor:"pointer",display:"flex",alignItems:"center",gap:8,color:form.status===key?s.color:"#94a3b8",fontWeight:700,fontSize:14}},
-                React.createElement("span",{style:{fontSize:20}},s.emoji),s.label
+              React.createElement("button",{key,onClick:()=>setForm(f=>({...f,status:key})),style:{padding:"10px 8px",borderRadius:10,border:"2px solid "+(form.status===key?s.color:"#334155"),background:form.status===key?s.bg:"#0f172a",cursor:"pointer",display:"flex",alignItems:"center",gap:7,color:form.status===key?s.color:"#94a3b8",fontWeight:700,fontSize:13}},
+                React.createElement("span",{style:{fontSize:18}},s.emoji),s.label
               )
             )
           ),
-          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:"#64748b",marginBottom:8}},"NOTE / REASON"),
-          React.createElement("textarea",{value:form.note,onChange:e=>setForm(f=>({...f,note:e.target.value})),placeholder:"e.g. Doctor appointment, client call...",style:{width:"100%",background:"#0f172a",border:"1px solid #334155",borderRadius:12,padding:"12px 14px",color:"#e2e8f0",fontSize:14,resize:"none",height:76,boxSizing:"border-box",outline:"none",marginBottom:18}}),
-          React.createElement("div",{style:{display:"flex",gap:12}},
-            React.createElement("button",{onClick:()=>setModal(null),style:{flex:1,padding:"13px",borderRadius:12,border:"1px solid #334155",background:"transparent",color:"#64748b",cursor:"pointer",fontWeight:700,fontSize:15}},"Cancel"),
-            React.createElement("button",{onClick:saveModal,style:{flex:2,padding:"13px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#818cf8,#38bdf8)",color:"#fff",cursor:"pointer",fontWeight:900,fontSize:16}},syncing?"Syncing...":"Save & Sync 🔥")
+          React.createElement("div",{style:{fontSize:12,fontWeight:800,color:"#64748b",marginBottom:6}},"NOTE / REASON"),
+          React.createElement("textarea",{value:form.note,onChange:e=>setForm(f=>({...f,note:e.target.value})),placeholder:"e.g. Doctor appointment, client call...",style:{width:"100%",background:"#0f172a",border:"1px solid #334155",borderRadius:10,padding:"10px 12px",color:"#e2e8f0",fontSize:13,resize:"none",height:64,boxSizing:"border-box",outline:"none",marginBottom:14}}),
+          React.createElement("div",{style:{display:"flex",gap:10}},
+            React.createElement("button",{onClick:()=>setModal(null),style:{flex:1,padding:"11px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#64748b",cursor:"pointer",fontWeight:700,fontSize:14}},"Cancel"),
+            React.createElement("button",{onClick:saveModal,style:{flex:2,padding:"11px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#818cf8,#38bdf8)",color:"#fff",cursor:"pointer",fontWeight:900,fontSize:15}},syncing?"Syncing...":"Save & Sync 🔥")
           )
         )
       );
