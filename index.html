@@ -153,6 +153,25 @@ function App() {
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,background:"#1e293b",padding:"6px 12px",borderRadius:20}},
           React.createElement("div",{style:{width:28,height:28,borderRadius:"50%",background:GRADIENTS[meIndex],display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff"}},me.avatar),
           React.createElement("span",{style:{fontSize:13,fontWeight:700}},me.name)
+          ),
+
+          // Week Summary bar
+          view==="week"&&React.createElement("div",{style:{background:"#1e293b",borderRadius:12,padding:"8px 12px",flexShrink:0}},
+            React.createElement("div",{style:{fontSize:11,fontWeight:800,color:"#64748b",marginBottom:6}},"📊 WEEK SUMMARY"),
+            React.createElement("div",{style:{display:"flex",gap:6}},
+              weekDays.map((d,i)=>{ const key=toKey(d),isToday=key===today;
+                return React.createElement("div",{key:i,style:{flex:1,background:isToday?"rgba(129,140,248,.12)":"#0f172a",borderRadius:10,padding:"6px 8px",border:isToday?"1px solid rgba(129,140,248,.4)":"1px solid transparent"}},
+                  React.createElement("div",{style:{fontSize:11,fontWeight:800,color:isToday?"#818cf8":"#64748b",marginBottom:3}},DAY_NAMES[i]),
+                  Object.entries(STATUSES).filter(([k])=>k!=="unknown"&&countForDay(key,k)>0).map(([k,s])=>
+                    React.createElement("div",{key:k,style:{display:"flex",alignItems:"center",gap:3,marginBottom:1}},
+                      React.createElement("span",{style:{fontSize:10}},s.emoji),
+                      React.createElement("span",{style:{fontSize:11,color:s.color,fontWeight:700}},countForDay(key,k))
+                    )
+                  )
+                );
+              })
+            )
+          )
         ),
         React.createElement("button",{onClick:switchUser,style:{padding:"6px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:12}},"Switch"),
         React.createElement("button",{onClick:()=>db.ref("presence").once("value",(snap)=>{ const val=snap.val(); if(val) setPresence(val); showToast("🔄 Refreshed!"); }),style:{padding:"6px 10px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:13}},"🔄")
@@ -164,12 +183,12 @@ function App() {
       Object.entries(STATUSES).filter(([k])=>k!=="unknown").map(([key,s])=>
         React.createElement("button",{key,onClick:()=>setActiveFilter(activeFilter===key?"all":key),
           style:{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:20,
-            border:"2px solid "+(activeFilter===key?s.color:s.color+"99"),
-            background:activeFilter===key?s.bg:s.bg+"cc",
-            cursor:"pointer",color:s.color,transition:"all .2s"}},
+            border:"2px solid "+s.color,
+            background:activeFilter===key?s.bg:"#1e293b",
+            cursor:"pointer",color:activeFilter===key?s.color:"#e2e8f0",transition:"all .2s"}},
           React.createElement("span",{style:{fontSize:16}},s.emoji),
-          React.createElement("span",{style:{fontWeight:900,fontSize:18}},todayCounts[key]),
-          React.createElement("span",{style:{fontSize:12,fontWeight:700}},s.label)
+          React.createElement("span",{style:{fontWeight:900,fontSize:18,color:s.color}},todayCounts[key]),
+          React.createElement("span",{style:{fontSize:12,fontWeight:700,color:activeFilter===key?s.color:"#94a3b8"}},s.label)
         )
       )
     ),
@@ -190,7 +209,8 @@ function App() {
     // Calendar (flex:1 fills remaining space)
     loading
       ? React.createElement("div",{style:{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:15}},"Connecting to Firebase...")
-      : React.createElement("div",{style:{flex:1,background:"#1e293b",borderRadius:14,padding:"10px 12px",overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}},
+      : React.createElement(React.Fragment,null,
+          React.createElement("div",{style:{flex:1,background:"#1e293b",borderRadius:14,padding:"10px 12px",overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}},
 
           // ── WEEK VIEW ──────────────────────────────────────────
           view==="week"&&React.createElement(React.Fragment,null,
