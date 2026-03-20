@@ -143,7 +143,8 @@ function App() {
           React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:GRADIENTS[meIndex],display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff"}},me.avatar),
           React.createElement("span",{style:{fontSize:14,fontWeight:700}},me.name)
         ),
-        React.createElement("button",{onClick:switchUser,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:13}},"Switch")
+        React.createElement("button",{onClick:switchUser,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:13}},"Switch"),
+        React.createElement("button",{onClick:()=>db.ref("presence").once("value",(snap)=>{ const val=snap.val(); if(val) setPresence(val); showToast("🔄 Refreshed!"); }),style:{padding:"8px 12px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:15},title:"Refresh"},"🔄")
       )
     ),
     React.createElement("div",{style:{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap",justifyContent:"center"}},
