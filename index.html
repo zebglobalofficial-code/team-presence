@@ -163,10 +163,10 @@ function App() {
     ),
     React.createElement("div",{style:{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap",justifyContent:"center"}},
       Object.entries(STATUSES).filter(([k])=>k!=="unknown").map(([key,s])=>
-        React.createElement("button",{key,onClick:()=>setActiveFilter(activeFilter===key?"all":key),style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:22,border:"2px solid "+(activeFilter===key?s.color:"transparent"),background:activeFilter===key?s.bg:"#1e293b",cursor:"pointer",color:activeFilter===key?s.color:"#94a3b8"}},
+        React.createElement("button",{key,onClick:()=>setActiveFilter(activeFilter===key?"all":key),style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:22,border:"2px solid "+(activeFilter===key?s.color:s.color+"88"),background:activeFilter===key?s.bg:s.bg+"99",cursor:"pointer",color:s.color,transition:"all .2s"}},
           React.createElement("span",{style:{fontSize:18}},s.emoji),
-          React.createElement("span",{style:{fontWeight:900,fontSize:20}},todayCounts[key]),
-          React.createElement("span",{style:{fontSize:13,fontWeight:600}},s.label)
+          React.createElement("span",{style:{fontWeight:900,fontSize:22}},todayCounts[key]),
+          React.createElement("span",{style:{fontSize:13,fontWeight:700}},s.label)
         )
       )
     ),
